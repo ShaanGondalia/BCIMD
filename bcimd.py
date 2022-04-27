@@ -14,7 +14,7 @@ def read_data(filename):
 	return df.to_numpy().T
 
 @ignore_warnings(category=ConvergenceWarning)
-def first_level_cross_val(data, type="none"):
+def first_level_cross_val(data, other_data, type="none"):
 	kf = KFold(n_splits=6, random_state = None, shuffle=False)
 	kf.get_n_splits(data)
 	fprs = {}
@@ -23,6 +23,7 @@ def first_level_cross_val(data, type="none"):
 	labels = np.empty(data.shape[0]*data.shape[1])
 	y_fin = []
 	total_acc = 0
+	models = []
 
 	i = 1
 	for train_index, test_index in kf.split(data):
@@ -33,6 +34,7 @@ def first_level_cross_val(data, type="none"):
 
 		decision_function.extend(df)
 		y_fin.extend(y["test"])
+		models.append(model)
 		total_acc+=acc
 		fprs[f"Fold {i}"], tprs[f"Fold {i}"], thresholds = roc_curve(y["test"], df, drop_intermediate=False)
 
@@ -56,6 +58,25 @@ def first_level_cross_val(data, type="none"):
 	plt.plot(fpr, tpr, label="Total")
 	plt.legend()
 	plt.show()
+
+	# Overt test on img and vice versa
+
+	prob_0 = np.zeros(240)
+	pred = np.zeros(240)
+	X_other, y_other = reshape_for_model(other_data)
+	for model in models:
+		prob_0 = np.add(prob_0, model.predict_proba(X_other)[:, 1])
+
+	prob_0 = prob_0/6
+	acc = 0
+	for i in range(240):
+		if prob_0[i] < 0.5 and y_other[i] == 0:
+			acc += 1
+		elif prob_0[i] > 0.5 and y_other[i] == 1:
+			acc += 1
+
+	print(f"Total Prediction Accuracy When Testing on Imagined Data: {acc/240}")
+
 
 def plot_weights_by_channel(weights, type):
 	plt.figure()
@@ -161,8 +182,8 @@ def main():
 	plt.show()
 	"""
 
-	# first_level_cross_val(data_img, type="Imagined")
-	first_level_cross_val(data_overt, type="Overt")
+	first_level_cross_val(data_img, data_overt, type="Imagined")
+	first_level_cross_val(data_overt, data_img, type="Overt")
 
 if __name__ == "__main__":
 	main()
